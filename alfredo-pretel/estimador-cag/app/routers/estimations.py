@@ -1,33 +1,28 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query
 
-from app.services.llm_service import generate_estimation
+from app.prompts.loader import render_estimation_prompt
+from app.schemas import EstimationRequest, EstimationResponse
+from app.services.llm_service import call_llm
 
 router = APIRouter(prefix="/estimations", tags=["estimations"])
 
 
-class EstimationRequest(BaseModel):
-    transcription: str = Field(
-        ...,
-        min_length=20,
-        description="Texto completo de la transcripción de la reunión",
-    )
-
-
-class EstimationResponse(BaseModel):
-    estimation: str
-    model: str
-    provider: str
-    input_tokens: int
-    output_tokens: int
-
-
 @router.post("/estimate", response_model=EstimationResponse)
-async def estimate(request: EstimationRequest) -> EstimationResponse:
+async def estimate(
+    request: EstimationRequest,
+    prompt_version: str = Query("v1", description="Versión del prompt a usar"),
+) -> EstimationResponse:
     try:
-        result = await generate_estimation(request.transcription)
-        return EstimationResponse(**result)
+        system, user = render_estimation_prompt(request, version=prompt_version)
+        result = await call_llm(system, user)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Prompt version '{prompt_version}' no encontrada",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando estimación: {e}")
+
+    return EstimationResponse(text=result["text"], prompt_version=prompt_version)

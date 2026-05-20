@@ -1,150 +1,150 @@
 """
-Wrapper conversacional con Streamlit para el Estimador CAG.
+Cliente Streamlit del Estimador.
 
-Reutiliza el mismo system prompt y contexto few-shot que el endpoint FastAPI
-(`app/services/llm_service.py`), pero con UI de chat y streaming token a token.
+Diferencia respecto a la sesión 03: ya no es un chat. Es un formulario que
+produce un EstimationRequest tipado y lo envía por HTTP al servicio IA
+(POST /api/v1/estimations/estimate). La respuesta se muestra debajo.
 
-Ejecutar:
+Arrancar (en dos terminales):
+
+    # 1. Servicio IA (FastAPI)
+    uv run uvicorn app.main:app --reload
+
+    # 2. Cliente (Streamlit)
     uv run streamlit run streamlit_app.py
 """
 from __future__ import annotations
 
+import os
 import time
-from typing import Iterator
 
+import httpx
 import streamlit as st
-from anthropic import Anthropic
 
-from app.config import settings
-from app.context.examples import ESTIMATION_EXAMPLES
-from app.services.llm_service import build_system_prompt
+from app.schemas import (
+    DetailLevel,
+    EstimationRequest,
+    OutputFormat,
+    ProjectType,
+)
 
-SYSTEM_PROMPT = build_system_prompt()
+DEFAULT_API_URL = "http://localhost:8000"
+API_URL = os.getenv("ESTIMATOR_API_URL", DEFAULT_API_URL).rstrip("/")
+ENDPOINT = f"{API_URL}/api/v1/estimations/estimate"
 
 st.set_page_config(
-    page_title="Estimador CAG — Chat",
-    page_icon="💬",
+    page_title="Estimador — Formulario",
+    page_icon="🧮",
     layout="wide",
 )
 
-
-def get_api_key() -> str:
-    """API key desde st.secrets (prioritario) o desde .env vía pydantic-settings."""
-    try:
-        key = st.secrets.get("ANTHROPIC_API_KEY")  # type: ignore[attr-defined]
-        if key:
-            return key
-    except (FileNotFoundError, st.errors.StreamlitAPIException):
-        pass
-    return settings.anthropic_api_key
-
-
-def history_for_api() -> list[dict]:
-    """Convierte el historial de session_state en mensajes para la API."""
-    return [
-        {"role": m["role"], "content": m["content"]}
-        for m in st.session_state["messages"]
-    ]
-
-
-def stream_estimation(messages: list[dict]) -> Iterator[str]:
-    """Llama a Anthropic en streaming y va emitiendo deltas de texto."""
-    api_key = get_api_key()
-    if not api_key:
-        yield (
-            "❌ No hay `ANTHROPIC_API_KEY` configurada. "
-            "Añádela en `.env` o en `.streamlit/secrets.toml`."
-        )
-        return
-
-    client = Anthropic(api_key=api_key)
-    started = time.perf_counter()
-
-    with client.messages.stream(
-        model=settings.anthropic_model,
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=messages,
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
-        final = stream.get_final_message()
-
-    st.session_state["last_metrics"] = {
-        "model": final.model,
-        "input_tokens": final.usage.input_tokens,
-        "output_tokens": final.usage.output_tokens,
-        "elapsed_s": round(time.perf_counter() - started, 2),
-    }
-
-
-# ----------------------------- Sidebar (Nivel 3) -----------------------------
+# --------------------------------- Sidebar -----------------------------------
 with st.sidebar:
-    st.header("🧠 Contexto CAG")
-    st.caption(f"Proveedor: `{settings.llm_provider}` · Modelo: `{settings.anthropic_model}`")
-
-    with st.expander("System prompt activo", expanded=False):
-        st.text_area(
-            "system_prompt",
-            value=SYSTEM_PROMPT,
-            height=320,
-            disabled=True,
-            label_visibility="collapsed",
-        )
-
-    with st.expander(
-        f"Ejemplos inyectados ({len(ESTIMATION_EXAMPLES)})", expanded=False
-    ):
-        for i, ex in enumerate(ESTIMATION_EXAMPLES, start=1):
-            st.markdown(f"**Ejemplo {i} — resumen de reunión**")
-            st.markdown(f"> {ex['meeting_summary']}")
-            st.markdown("**Estimación de referencia:**")
-            st.markdown(ex["estimation"])
-            if i < len(ESTIMATION_EXAMPLES):
-                st.divider()
+    st.header("🔌 Servicio IA")
+    st.caption(f"Endpoint: `{ENDPOINT}`")
+    st.caption(
+        "Cambia el host con la variable de entorno `ESTIMATOR_API_URL` "
+        "si el backend no corre en localhost:8000."
+    )
 
     st.divider()
     st.subheader("📊 Última llamada")
     metrics = st.session_state.get("last_metrics")
     if metrics:
-        c1, c2 = st.columns(2)
-        c1.metric("Input tokens", metrics["input_tokens"])
-        c2.metric("Output tokens", metrics["output_tokens"])
         st.metric("Latencia", f"{metrics['elapsed_s']} s")
-        st.caption(f"Modelo devuelto: `{metrics['model']}`")
+        st.caption(f"Prompt version: `{metrics['prompt_version']}`")
+        st.caption(f"HTTP status: `{metrics['status']}`")
     else:
         st.caption("Aún no se ha realizado ninguna llamada.")
 
-    st.divider()
-    if st.button("🧹 Limpiar conversación", use_container_width=True):
-        st.session_state["messages"] = []
-        st.session_state.pop("last_metrics", None)
-        st.rerun()
 
-
-# -------------------------------- Chat ---------------------------------------
-st.title("💬 Estimador CAG")
+# ---------------------------------- Form -------------------------------------
+st.title("🧮 Estimador de proyectos")
 st.caption(
-    "Pega una transcripción de reunión y obtén una estimación de software. "
-    "Arquitectura CAG: los ejemplos históricos se inyectan en el system prompt."
+    "Rellena el formulario y envíalo. El cliente serializa los datos como "
+    "`EstimationRequest` y los manda al servicio IA por HTTP."
 )
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-
-for msg in st.session_state["messages"]:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-user_input = st.chat_input("Pega aquí la transcripción de la reunión…")
-if user_input:
-    st.session_state["messages"].append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-        response_text = st.write_stream(stream_estimation(history_for_api()))
-
-    st.session_state["messages"].append(
-        {"role": "assistant", "content": response_text}
+with st.form("estimation_form", clear_on_submit=False):
+    description = st.text_area(
+        "Descripción del proyecto",
+        placeholder=(
+            "Describe alcance, integraciones, plazos deseados y cualquier "
+            "restricción técnica o de negocio relevante (20–2000 caracteres)."
+        ),
+        height=220,
     )
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        project_type = st.selectbox(
+            "Tipo de proyecto",
+            options=[pt.value for pt in ProjectType],
+            format_func=lambda v: v.replace("_", " ").title(),
+        )
+    with c2:
+        detail_level = st.selectbox(
+            "Nivel de detalle",
+            options=[dl.value for dl in DetailLevel],
+            index=1,  # medium
+            format_func=str.title,
+        )
+    with c3:
+        output_format = st.selectbox(
+            "Formato de salida",
+            options=[of.value for of in OutputFormat],
+            format_func=lambda v: v.replace("_", " ").title(),
+        )
+    submitted = st.form_submit_button("Estimar", type="primary")
+
+if submitted:
+    try:
+        request = EstimationRequest(
+            description=description,
+            project_type=ProjectType(project_type),
+            detail_level=DetailLevel(detail_level),
+            output_format=OutputFormat(output_format),
+        )
+    except Exception as exc:  # ValidationError de Pydantic
+        st.error(f"❌ Datos del formulario inválidos: {exc}")
+        st.stop()
+
+    payload = request.model_dump(mode="json")
+    started = time.perf_counter()
+    try:
+        response = httpx.post(ENDPOINT, json=payload, timeout=120)
+    except httpx.RequestError as exc:
+        st.error(
+            f"❌ No se pudo contactar con el servicio IA en `{ENDPOINT}`.\n\n"
+            f"¿Tienes el backend levantado? Arráncalo con "
+            "`uv run uvicorn app.main:app --reload`.\n\nDetalle: {exc}"
+        )
+        st.stop()
+
+    elapsed = round(time.perf_counter() - started, 2)
+    if response.status_code != 200:
+        st.error(
+            f"❌ El servicio IA respondió {response.status_code}: "
+            f"`{response.text}`"
+        )
+        st.stop()
+
+    data = response.json()
+    st.session_state["last_metrics"] = {
+        "elapsed_s": elapsed,
+        "prompt_version": data.get("prompt_version", "?"),
+        "status": response.status_code,
+    }
+    st.session_state["last_response"] = data
+    st.session_state["last_request"] = payload
+
+
+last_response = st.session_state.get("last_response")
+if last_response:
+    st.divider()
+    st.subheader("📝 Estimación")
+    st.markdown(last_response["text"])
+    with st.expander("Detalles de la petición", expanded=False):
+        st.json(st.session_state.get("last_request", {}))
+        st.caption(
+            f"Respondida con prompt_version=`{last_response.get('prompt_version')}`"
+        )

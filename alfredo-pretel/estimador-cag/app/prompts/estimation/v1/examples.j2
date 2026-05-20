@@ -1,0 +1,40 @@
+### Ejemplo 1 — SaaS de gestión de tareas para equipos remotos
+
+Descripción: pequeña startup necesita una plataforma web colaborativa de
+gestión de tareas con tableros tipo Kanban, comentarios en tiempo real,
+menciones con notificación por email y free trial de 14 días.
+
+| phase | tasks | hours | confidence_pct |
+|---|---|---|---|
+| Discovery y UX | wireframes, validación con 3 clientes | 35 | 85 |
+| Backend core | API REST, RBAC, modelo de datos | 90 | 80 |
+| Realtime | WebSockets para comentarios y presencia | 40 | 70 |
+| Notificaciones | colas + emails transaccionales | 25 | 80 |
+| Frontend | React + boards y vistas | 110 | 75 |
+| QA y deploy | tests E2E, CI/CD | 35 | 85 |
+
+Total: 335 horas — 2 ingenieros + 1 diseñador — 9-10 semanas.
+Stack: FastAPI, Postgres, Redis, Next.js, Vercel.
+Riesgos: latencia del canal realtime con alta concurrencia; coste del
+proveedor de email transaccional cuando el free trial escala.
+
+---
+
+### Ejemplo 2 — App móvil de seguimiento de hábitos
+
+Descripción: app iOS y Android para tracking diario de hábitos con widgets en
+homescreen, sincronización en la nube y modo offline-first.
+
+| phase | tasks | hours | confidence_pct |
+|---|---|---|---|
+| UX y sistema de diseño | flujos + componentes | 50 | 85 |
+| App cross-platform | React Native, navegación, vistas | 140 | 70 |
+| Sync offline-first | resolución de conflictos | 60 | 60 |
+| Widgets nativos | SwiftUI + Glance | 50 | 65 |
+| Backend ligero | auth, API de sync | 40 | 80 |
+| QA en dispositivos | smoke tests en 6 devices | 30 | 80 |
+
+Total: 370 horas — 2 móvil + 1 backend + 1 diseñador — 10-12 semanas.
+Stack: React Native, Swift/Kotlin para widgets, Supabase.
+Riesgos: divergencia de comportamiento de widgets entre iOS y Android;
+rendimiento del motor de sync con muchos eventos diarios.

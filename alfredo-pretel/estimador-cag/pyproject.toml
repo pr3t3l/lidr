@@ -6,8 +6,15 @@ requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.101.0",
     "fastapi>=0.136.1",
+    "httpx>=0.27.0",
+    "jinja2>=3.1.4",
     "pydantic-settings>=2.14.1",
     "python-dotenv>=1.2.2",
     "streamlit>=1.40.0",
     "uvicorn[standard]>=0.46.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
 ]
