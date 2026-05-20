@@ -46,6 +46,21 @@ uv run uvicorn app.main:app --reload
 
 El servidor queda en \`http://localhost:8000\`.
 
+### 5. (Opcional) Interfaz conversacional con Streamlit
+
+\`\`\`bash
+uv run streamlit run streamlit_app.py
+\`\`\`
+
+Abre `http://localhost:8501`. Permite pegar transcripciones en un chat y ver
+la estimación **en streaming** (token a token), con un sidebar que muestra el
+system prompt activo, los ejemplos CAG inyectados y métricas de la última llamada
+(modelo, tokens y latencia).
+
+La API key se lee primero de `.streamlit/secrets.toml` (ver
+`.streamlit/secrets.toml.example`) y, si no existe, del `ANTHROPIC_API_KEY` del
+`.env`. Nunca se hardcodea en el código.
+
 ---
 
 ## Endpoints
@@ -93,6 +108,7 @@ app/
 │   └── llm_service.py       # Llamada a Anthropic + construcción del prompt
 └── context/
     └── examples.py          # Few-shot examples (datos estáticos inyectados)
+streamlit_app.py             # Wrapper conversacional (chat + streaming + sidebar CAG)
 \`\`\`
 
 ### Flujo de una petición

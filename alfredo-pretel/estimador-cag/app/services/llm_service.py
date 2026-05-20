@@ -7,7 +7,7 @@ from app.config import settings
 from app.context.examples import ESTIMATION_EXAMPLES
 
 
-def _build_system_prompt() -> str:
+def build_system_prompt() -> str:
     """Construye el system prompt con los ejemplos few-shot inyectados."""
     examples_block = "\n\n---\n\n".join(
         f"### Ejemplo {i + 1}\n"
@@ -56,7 +56,7 @@ async def generate_estimation(transcription: str) -> dict:
     response = await client.messages.create(
         model=settings.anthropic_model,
         max_tokens=2048,
-        system=_build_system_prompt(),
+        system=build_system_prompt(),
         messages=[
             {
                 "role": "user",
